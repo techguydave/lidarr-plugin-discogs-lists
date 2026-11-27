@@ -47,7 +47,14 @@ The token is stored the way Lidarr stores any API key: in Lidarr's database, hid
 
 ## How matching works
 
-Discogs does not provide MusicBrainz IDs, so Lidarr searches by artist and album name.
+Lidarr needs a MusicBrainz ID for each album, which Discogs doesn't provide. The plugin finds one in two ways:
+
+1. **MusicBrainz links.** MusicBrainz editors link many albums and artists to their Discogs pages. When your Discogs release, its master release or an artist has such a link, the plugin uses it, which finds the exact recording.
+2. **Name search.** Otherwise it searches Lidarr by artist and title. It only accepts a result whose title and artist are close to the Discogs ones, using the year to choose between similar albums.
+
+Releases with no close match are skipped. Lidarr tracks albums rather than individual pressings, so it chooses which edition to monitor; you can pick another on the album's page in Lidarr.
+
+To find links, each sync sends the Discogs release, master and artist IDs of your items to [MusicBrainz](https://musicbrainz.org), read-only and at most about one request per second. No Discogs token or account details are sent. If MusicBrainz is unavailable, the plugin matches by name.
 
 - Releases Lidarr cannot match are skipped. Pressings with unusual titles are the most likely to be missed.
 - If Lidarr's metadata search fails for one release, that release is skipped with a warning in the log, and the rest of the list still imports. If 25 searches fail in a row, the plugin stops and tries again later.

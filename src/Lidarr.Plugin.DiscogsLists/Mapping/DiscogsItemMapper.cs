@@ -17,16 +17,22 @@ namespace Lidarr.Plugin.DiscogsLists.Mapping
 
         private static readonly string[] PlaceholderArtists = { "Various", "Various Artists", "Unknown Artist", "No Artist" };
 
-        public static ImportListItemInfo Map(DiscogsRelease release)
+        public static DiscogsItem Map(DiscogsRelease release)
         {
             var information = release?.BasicInformation;
             var artist = CleanArtist(information?.Artists?.FirstOrDefault()?.Name);
+            var item = Album(artist, information?.Title);
 
-            return Album(artist, information?.Title);
+            return item == null ? null : new DiscogsItem(item)
+            {
+                ReleaseId = release.Id,
+                MasterId = information.MasterId,
+                Year = information.Year
+            };
         }
 
         // Returns null for entries that cannot be imported, such as labels.
-        public static ImportListItemInfo Map(DiscogsListItem item)
+        public static DiscogsItem Map(DiscogsListItem item)
         {
             var title = item?.DisplayTitle;
 
@@ -39,7 +45,7 @@ namespace Lidarr.Plugin.DiscogsLists.Mapping
             {
                 var artist = CleanArtist(title);
 
-                return IsUsableArtist(artist) ? new ImportListItemInfo { Artist = artist } : null;
+                return IsUsableArtist(artist) ? new DiscogsItem(new ImportListItemInfo { Artist = artist }) { DiscogsArtistId = item.Id } : null;
             }
 
             if (!string.Equals(item.Type, "release", StringComparison.OrdinalIgnoreCase) &&
@@ -55,7 +61,14 @@ namespace Lidarr.Plugin.DiscogsLists.Mapping
                 return null;
             }
 
-            return Album(CleanArtist(title[..separator]), title[(separator + TitleSeparator.Length)..]);
+            var album = Album(CleanArtist(title[..separator]), title[(separator + TitleSeparator.Length)..]);
+            var isMaster = string.Equals(item.Type, "master", StringComparison.OrdinalIgnoreCase);
+
+            return album == null ? null : new DiscogsItem(album)
+            {
+                ReleaseId = isMaster ? null : item.Id,
+                MasterId = isMaster ? item.Id : null
+            };
         }
 
         internal static string CleanArtist(string name)

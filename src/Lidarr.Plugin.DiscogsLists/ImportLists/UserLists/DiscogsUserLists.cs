@@ -32,7 +32,7 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists.UserLists
 
         protected override string OptionsAction => ListsAction;
 
-        protected override IEnumerable<ImportListItemInfo> FetchItems(DiscogsSession session)
+        protected override IEnumerable<DiscogsItem> FetchItems(DiscogsSession session)
         {
             var selected = Settings.ListIds?.Distinct().ToList() ?? new List<int>();
 

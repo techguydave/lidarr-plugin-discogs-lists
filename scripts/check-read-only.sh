@@ -5,7 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 SOURCE="${1:-src/Lidarr.Plugin.DiscogsLists}"
-TRANSPORT="DiscogsTransport.cs"
+# The only files allowed to use the network. Each may build exactly one request, and it must be a GET.
+TRANSPORTS=("DiscogsTransport.cs" "MusicBrainzTransport.cs")
 failed=0
 
 report() {
@@ -25,13 +26,21 @@ report "non-GET HTTP method" \
 report "write-style HTTP call" \
     "$(search '\.(Post|Put|Patch|Delete)(AsJson)?(Async)?(<[^>]*>)? *\(')"
 
-report "network access outside $TRANSPORT" \
-    "$(search --exclude="$TRANSPORT" 'HttpClient|HttpRequestMessage|HttpRequestBuilder|HttpRequest\(|WebRequest|WebClient|HttpMessageInvoker|Socket|\.Send(Async)? *\(')"
+excludes=()
+for transport in "${TRANSPORTS[@]}"; do excludes+=(--exclude="$transport"); done
+
+report "network access outside ${TRANSPORTS[*]}" \
+    "$(search "${excludes[@]}" 'HttpClient|HttpRequestMessage|HttpRequestBuilder|HttpRequest\(|WebRequest|WebClient|HttpMessageInvoker|Socket|\.Send(Async)? *\(')"
 
 requests="$(search 'new +HttpRequestMessage')"
-if [ "$(printf '%s' "$requests" | grep -c .)" != "1" ] || ! printf '%s' "$requests" | grep -q 'new HttpRequestMessage(HttpMethod\.Get,'; then
-    report "expected exactly one request, constructed with HttpMethod.Get" "${requests:-none found}"
-fi
+for transport in "${TRANSPORTS[@]}"; do
+    mine="$(printf '%s\n' "$requests" | grep "/$transport:" || true)"
+    if [ "$(printf '%s' "$mine" | grep -c .)" != "1" ] || ! printf '%s' "$mine" | grep -q 'new HttpRequestMessage(HttpMethod\.Get,'; then
+        report "expected exactly one request in $transport, constructed with HttpMethod.Get" "${mine:-none found}"
+    fi
+done
+others="$(printf '%s\n' "$requests" | grep -v -e "/DiscogsTransport.cs:" -e "/MusicBrainzTransport.cs:" | grep . || true)"
+report "request built outside the transports" "$others"
 
 [ "$failed" -eq 0 ] && echo "Read-only check passed."
 exit "$failed"

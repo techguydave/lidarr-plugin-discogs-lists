@@ -28,7 +28,7 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists.Wantlist
 
         public override string Name => "Discogs Wantlist";
 
-        protected override IEnumerable<ImportListItemInfo> FetchItems(DiscogsSession session)
+        protected override IEnumerable<DiscogsItem> FetchItems(DiscogsSession session)
         {
             return Client.GetWants(session.Token, session.Username).Select(DiscogsItemMapper.Map);
         }

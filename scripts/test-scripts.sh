@@ -59,9 +59,9 @@ fi
 echo "ok   unpublished content is not releasable"
 
 mkdir -p "$WORK/source"
-cp "$SCRIPTS/../src/Lidarr.Plugin.DiscogsLists/Api/DiscogsTransport.cs" "$WORK/source/"
+cp "$SCRIPTS/../src/Lidarr.Plugin.DiscogsLists/Api/DiscogsTransport.cs" "$SCRIPTS/../src/Lidarr.Plugin.DiscogsLists/Api/MusicBrainzTransport.cs" "$WORK/source/"
 "$SCRIPTS/check-read-only.sh" "$WORK/source" >/dev/null
-echo "ok   read-only check accepts the transport"
+echo "ok   read-only check accepts the transports"
 
 for violation in 'client.PostAsync(uri, body);' 'var m = HttpMethod.Delete;' 'new HttpClient();' '_client.Put<Thing>(request);' 'request.Method = other;'; do
     echo "$violation" > "$WORK/source/Bad.cs"
