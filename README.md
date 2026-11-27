@@ -31,7 +31,8 @@ To test pre-releases, which are not intended for production use, install `https:
 2. In Lidarr, open **Settings > Import Lists**, select **+**, and choose a Discogs list (under **Other List**).
 3. Paste the token into **Personal Access Token**.
 4. For the collection or user lists, choose what to import. Leave the selection empty to import everything.
-5. Choose the usual Lidarr options (root folder, profiles, monitoring), then **Test** and **Save**.
+5. Set **Monitor** to **Specific Album** so Lidarr monitors only the albums on your Discogs list. Lidarr defaults to **All Artist Albums**, which monitors every album by each artist.
+6. Choose the usual Lidarr options (root folder, profiles), then **Test** and **Save**.
 
 ### Sharing one token
 
