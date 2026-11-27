@@ -11,3 +11,4 @@ All notable changes to this project are documented here. The format follows [Kee
 - **Discogs User Lists** import list for public and private lists, with an optional multi-select.
 - Personal access token authentication, entered once and shared between the three lists, with a per-list override.
 - Read-only Discogs access with rate limiting.
+- A release whose metadata search fails is skipped, instead of stopping the whole import.

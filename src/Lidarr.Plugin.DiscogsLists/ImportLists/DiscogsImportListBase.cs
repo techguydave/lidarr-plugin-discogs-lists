@@ -5,6 +5,7 @@ using System.Net;
 using FluentValidation.Results;
 using Lidarr.Plugin.DiscogsLists.Api;
 using Lidarr.Plugin.DiscogsLists.Auth;
+using Lidarr.Plugin.DiscogsLists.Mapping;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.ImportLists;
@@ -25,9 +26,11 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists
         private const string MissingToken = "Enter a Discogs personal access token, or save one on another Discogs list.";
 
         private readonly IDiscogsTokenResolver _tokenResolver;
+        private readonly MusicBrainzMatcher _matcher;
 
         protected DiscogsImportListBase(IDiscogsClient client,
                                         IDiscogsTokenResolver tokenResolver,
+                                        MusicBrainzMatcher matcher,
                                         IImportListStatusService importListStatusService,
                                         IConfigService configService,
                                         IParsingService parsingService,
@@ -36,6 +39,7 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists
         {
             Client = client;
             _tokenResolver = tokenResolver;
+            _matcher = matcher;
         }
 
         public override ImportListType ListType => ImportListType.Other;
@@ -60,12 +64,9 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists
             {
                 var session = CreateSession();
 
-                foreach (var item in FetchItems(session))
+                foreach (var item in _matcher.Match(FetchItems(session).Where(i => i != null), Definition.Name))
                 {
-                    if (item != null)
-                    {
-                        items.Add(item);
-                    }
+                    items.Add(item);
                 }
 
                 _importListStatusService.RecordSuccess(Definition.Id);
@@ -75,7 +76,7 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists
                 _importListStatusService.RecordFailure(Definition.Id, ex.RetryAfter);
                 _logger.Warn("{0}: {1}", Definition.Name, ex.Message);
             }
-            catch (DiscogsApiException ex)
+            catch (Exception ex) when (ex is DiscogsApiException or MetadataUnavailableException)
             {
                 _importListStatusService.RecordFailure(Definition.Id);
                 _logger.Warn("{0}: {1}", Definition.Name, ex.Message);
