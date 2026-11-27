@@ -45,7 +45,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Built as a pre-release, so the pre-release version stamp is tested before merging.
       - uses: ./.github/actions/build
+        with:
+          version: 0.0.0-develop.0
+          plugin-branch: develop
 
       - uses: actions/upload-artifact@v7
         with:

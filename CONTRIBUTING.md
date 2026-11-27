@@ -38,6 +38,8 @@ Versions follow [Semantic Versioning](https://semver.org).
 
 Every merge to `develop` publishes a pre-release, `X.Y.Z-develop.N`. Lidarr compares only `X.Y.Z` when it looks for pre-release updates, so each pre-release raises it: a breaking change raises the major version (the minor version before 1.0.0), `feat` raises the minor version, and anything else raises the patch version.
 
+Inside Lidarr a pre-release shows as `X.Y.Z.0 (develop)`, without the `N`, to match how Lidarr names the available version.
+
 A stable release takes the `X.Y.Z` of the pre-release with identical content, so stable version numbers can skip.
 
 ## Releasing
