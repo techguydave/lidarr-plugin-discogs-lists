@@ -1,0 +1,47 @@
+name: Check, test and package
+description: Runs every check and builds the release zip.
+
+inputs:
+  version:
+    description: Plugin version
+    required: false
+    default: 0.0.0-ci
+  plugin-branch:
+    description: Branch Lidarr checks for updates (empty for stable)
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Fetch Lidarr source
+      shell: bash
+      run: git submodule update --init --depth 1
+
+    - name: Check the plugin is read-only
+      shell: bash
+      run: scripts/check-read-only.sh
+
+    - name: Test scripts
+      shell: bash
+      run: scripts/test-scripts.sh
+
+    - name: Test plugin
+      shell: bash
+      run: scripts/test.sh -p:Version="$VERSION" -p:PluginBranch="$PLUGIN_BRANCH"
+      env:
+        VERSION: ${{ inputs.version }}
+        PLUGIN_BRANCH: ${{ inputs.plugin-branch }}
+
+    - name: Package plugin
+      shell: bash
+      run: |
+        scripts/build.sh "$VERSION" "$PLUGIN_BRANCH"
+        scripts/check-package.sh
+      env:
+        VERSION: ${{ inputs.version }}
+        PLUGIN_BRANCH: ${{ inputs.plugin-branch }}

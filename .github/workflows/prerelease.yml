@@ -1,0 +1,61 @@
+name: Pre-release
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prerelease
+  cancel-in-progress: false
+
+jobs:
+  prerelease:
+    name: Publish pre-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          version="$(scripts/next-version.sh)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: ./.github/actions/build
+        with:
+          version: ${{ steps.version.outputs.version }}
+          plugin-branch: develop
+
+      - name: Tag and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag is already published."
+            exit 0
+          fi
+
+          scripts/release-notes.sh prerelease "$VERSION" > "$RUNNER_TEMP/notes.md"
+
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            git tag "$tag" "$GITHUB_SHA"
+            git push origin "refs/tags/$tag"
+          fi
+
+          # Lidarr finds develop releases by their target branch.
+          gh release create "$tag" artifacts/*.zip \
+            --verify-tag --target develop --prerelease \
+            --title "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+
+          target="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .target_commitish)"
+          if [ "$target" != "develop" ]; then
+            echo "::error::Release target is '$target', so Lidarr will not find it on the develop channel."
+            exit 1
+          fi

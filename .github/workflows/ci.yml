@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  conventions:
+    name: Branch and title conventions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check branch names and pull request title
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [ "$BASE" = "main" ]; then
+            if [ "$HEAD" != "develop" ] || [ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+              echo "::error::Only this repository's develop branch can be merged into main. Open the pull request against develop."
+              exit 1
+            fi
+          elif ! grep -qE '^(feature|feat|bugfix|fix|hotfix|release|chore)/[a-z0-9]+([.-][a-z0-9]+)*$' <<<"$HEAD"; then
+            echo "::error::Branch '$HEAD' does not follow Conventional Branch, e.g. feat/add-thing or fix/issue-12."
+            exit 1
+          fi
+
+          if ! grep -qE '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9-]+\))?!?: .+' <<<"$TITLE"; then
+            echo "::error::The title must be a Conventional Commit, e.g. 'feat: add thing'. It decides the next version."
+            exit 1
+          fi
+
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: plugin
+          path: artifacts/*.zip
+
+  release-check:
+    name: Release readiness
+    if: github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Check there is a matching pre-release and a CHANGELOG entry
+        run: |
+          version="$(scripts/release-version.sh)"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::v$version has already been released."
+            exit 1
+          fi
+          scripts/release-notes.sh stable "$version"
+
+  # The one check branch protection requires.
+  passed:
+    name: CI passed
+    if: always()
+    needs: [conventions, build, release-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              exit 1
+            fi
+          done

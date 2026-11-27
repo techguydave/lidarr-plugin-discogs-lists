@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>Lidarr.Plugin.DiscogsLists</AssemblyName>
+    <RootNamespace>Lidarr.Plugin.DiscogsLists</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Product>Lidarr Lists for Discogs</Product>
+
+    <!-- Release builds pass -p:Version=X.Y.Z[-develop.N]. Lidarr reads it back as the installed version,
+         so no source revision may be appended. -->
+    <Version Condition="'$(Version)' == ''">0.0.0-local</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+
+    <!-- The branch whose releases Lidarr checks for updates. Empty means the stable (main) channel. -->
+    <PluginBranch Condition="'$(PluginBranch)' == ''"></PluginBranch>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>PluginBranch</_Parameter1>
+      <_Parameter2>$(PluginBranch)</_Parameter2>
+    </AssemblyAttribute>
+    <InternalsVisibleTo Include="Lidarr.Plugin.DiscogsLists.Test" />
+  </ItemGroup>
+
+  <!-- Lidarr provides these assemblies at runtime. Shipping copies would break type identity. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\ext\Lidarr\src\NzbDrone.Core\Lidarr.Core.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+    <ProjectReference Include="..\..\ext\Lidarr\src\NzbDrone.Common\Lidarr.Common.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+</Project>
