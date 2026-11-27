@@ -17,11 +17,12 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists.Wantlist
         public DiscogsWantlist(IDiscogsClient client,
                                IDiscogsTokenResolver tokenResolver,
                                MusicBrainzMatcher matcher,
+                               ImportSettingsAdvisor advisor,
                                IImportListStatusService importListStatusService,
                                IConfigService configService,
                                IParsingService parsingService,
                                Logger logger)
-            : base(client, tokenResolver, matcher, importListStatusService, configService, parsingService, logger)
+            : base(client, tokenResolver, matcher, advisor, importListStatusService, configService, parsingService, logger)
         {
         }
 

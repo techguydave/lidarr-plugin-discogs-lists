@@ -16,6 +16,7 @@ using NUnit.Framework;
 using NzbDrone.Core.Annotations;
 using NzbDrone.Core.ImportLists;
 using NzbDrone.Core.ImportLists.Lidarr;
+using NzbDrone.Core.Profiles.Metadata;
 using NzbDrone.Core.Validation;
 
 namespace Lidarr.Plugin.DiscogsLists.Test
@@ -28,12 +29,18 @@ namespace Lidarr.Plugin.DiscogsLists.Test
         private List<ImportListDefinition> _saved;
         private Mock<IImportListRepository> _repository;
         private FakeMetadata _metadata;
+        private Mock<IMetadataProfileService> _profiles;
+        private ImportListDefinition _definition;
 
         [SetUp]
         public void SetUp()
         {
             _discogs = new FakeDiscogs().WithIdentity();
             _metadata = new FakeMetadata();
+            _profiles = new Mock<IMetadataProfileService>();
+            _profiles.Setup(p => p.Exists(It.IsAny<int>())).Returns(true);
+            _profiles.Setup(p => p.Get(1)).Returns(new MetadataProfile { Id = 1, Name = "Standard" });
+            _profiles.Setup(p => p.Get(2)).Returns(new MetadataProfile { Id = 2, Name = MetadataProfileService.NONE_PROFILE_NAME });
             _status = new Mock<IImportListStatusService>();
             _saved = new List<ImportListDefinition>();
             _repository = new Mock<IImportListRepository>();
@@ -246,6 +253,25 @@ namespace Lidarr.Plugin.DiscogsLists.Test
             Assert.That(warning.ErrorMessage, Does.Contain("55"));
         }
 
+        [TestCase(ImportListMonitorType.SpecificAlbum, 1, true)]
+        [TestCase(ImportListMonitorType.SpecificAlbum, 2, false)]
+        [TestCase(ImportListMonitorType.EntireArtist, 1, false)]
+        [TestCase(ImportListMonitorType.None, 1, false)]
+        public void test_warns_when_specific_albums_would_pull_in_whole_catalogues(ImportListMonitorType monitor, int metadataProfileId, bool warns)
+        {
+            var list = Wantlist(new DiscogsWantlistSettings { ApiKey = "token" });
+            _definition.ShouldMonitor = monitor;
+            _definition.MetadataProfileId = metadataProfileId;
+            _discogs.Returns("/users/rodneyfool/wants?page=1&per_page=100", @"{""wants"": []}");
+
+            var result = list.Test();
+
+            var warnings = result.Errors.OfType<NzbDroneValidationFailure>().Where(f => f.ErrorMessage == ImportSettingsAdvisor.FullCatalogueWarning).ToList();
+            Assert.That(warnings, Has.Count.EqualTo(warns ? 1 : 0));
+            Assert.That(warnings.All(w => w.IsWarning && w.PropertyName == "MetadataProfileId"), Is.True);
+            Assert.That(result.Errors.Count, Is.EqualTo(warnings.Count));
+        }
+
         [Test]
         public void folder_picker_lists_folders_without_the_all_folder()
         {
@@ -299,19 +325,20 @@ namespace Lidarr.Plugin.DiscogsLists.Test
             new () { Id = id, Name = "My list", Settings = settings };
 
         private DiscogsCollection Collection(DiscogsCollectionSettings settings) =>
-            Create(settings, resolver => new DiscogsCollection(_discogs.CreateClient(), resolver, _metadata.CreateMatcher(), _status.Object, null, null, LogManager.CreateNullLogger()));
+            Create(settings, resolver => new DiscogsCollection(_discogs.CreateClient(), resolver, _metadata.CreateMatcher(), new ImportSettingsAdvisor(new Lazy<IMetadataProfileService>(() => _profiles.Object)), _status.Object, null, null, LogManager.CreateNullLogger()));
 
         private DiscogsWantlist Wantlist(DiscogsWantlistSettings settings) =>
-            Create(settings, resolver => new DiscogsWantlist(_discogs.CreateClient(), resolver, _metadata.CreateMatcher(), _status.Object, null, null, LogManager.CreateNullLogger()));
+            Create(settings, resolver => new DiscogsWantlist(_discogs.CreateClient(), resolver, _metadata.CreateMatcher(), new ImportSettingsAdvisor(new Lazy<IMetadataProfileService>(() => _profiles.Object)), _status.Object, null, null, LogManager.CreateNullLogger()));
 
         private DiscogsUserLists UserLists(DiscogsUserListsSettings settings) =>
-            Create(settings, resolver => new DiscogsUserLists(_discogs.CreateClient(), resolver, _metadata.CreateMatcher(), _status.Object, null, null, LogManager.CreateNullLogger()));
+            Create(settings, resolver => new DiscogsUserLists(_discogs.CreateClient(), resolver, _metadata.CreateMatcher(), new ImportSettingsAdvisor(new Lazy<IMetadataProfileService>(() => _profiles.Object)), _status.Object, null, null, LogManager.CreateNullLogger()));
 
         private TList Create<TList>(DiscogsSettingsBase settings, Func<IDiscogsTokenResolver, TList> factory)
             where TList : IImportList
         {
             var list = factory(new DiscogsTokenResolver(_repository.Object));
-            list.Definition = Definition(7, settings);
+            _definition = Definition(7, settings);
+            list.Definition = _definition;
 
             return list;
         }

@@ -12,3 +12,4 @@ All notable changes to this project are documented here. The format follows [Kee
 - Personal access token authentication, entered once and shared between the three lists, with a per-list override.
 - Read-only Discogs access with rate limiting.
 - A release whose metadata search fails is skipped, instead of stopping the whole import.
+- **Test** warns when **Monitor: Specific Album** is combined with a metadata profile other than **None**, which adds every album by each artist.

@@ -27,10 +27,12 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists
 
         private readonly IDiscogsTokenResolver _tokenResolver;
         private readonly MusicBrainzMatcher _matcher;
+        private readonly ImportSettingsAdvisor _advisor;
 
         protected DiscogsImportListBase(IDiscogsClient client,
                                         IDiscogsTokenResolver tokenResolver,
                                         MusicBrainzMatcher matcher,
+                                        ImportSettingsAdvisor advisor,
                                         IImportListStatusService importListStatusService,
                                         IConfigService configService,
                                         IParsingService parsingService,
@@ -40,6 +42,7 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists
             Client = client;
             _tokenResolver = tokenResolver;
             _matcher = matcher;
+            _advisor = advisor;
         }
 
         public override ImportListType ListType => ImportListType.Other;
@@ -169,6 +172,8 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists
                 failures.Add(new ValidationFailure(nameof(DiscogsSettingsBase.ApiKey), MissingToken));
                 return;
             }
+
+            _advisor.Check(Definition as ImportListDefinition, failures);
 
             try
             {
