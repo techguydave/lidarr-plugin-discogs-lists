@@ -44,6 +44,7 @@ The token is stored the way Lidarr stores any API key: in Lidarr's database, hid
 Discogs does not provide MusicBrainz IDs, so Lidarr searches by artist and album name.
 
 - Releases Lidarr cannot match are skipped. Pressings with unusual titles are the most likely to be missed.
+- If Lidarr's metadata search fails for one release, that release is skipped with a warning in the log, and the rest of the list still imports. If 25 searches fail in a row, the plugin stops and tries again later.
 - Collaborations use the first credited artist for the collection and wantlist.
 - "Various" artist compilations are skipped.
 - In user lists, releases, masters and artists are imported. Labels are skipped.

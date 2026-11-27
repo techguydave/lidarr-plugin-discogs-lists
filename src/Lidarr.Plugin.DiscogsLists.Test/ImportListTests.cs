@@ -8,6 +8,7 @@ using Lidarr.Plugin.DiscogsLists.ImportLists;
 using Lidarr.Plugin.DiscogsLists.ImportLists.Collection;
 using Lidarr.Plugin.DiscogsLists.ImportLists.UserLists;
 using Lidarr.Plugin.DiscogsLists.ImportLists.Wantlist;
+using Lidarr.Plugin.DiscogsLists.Mapping;
 using Moq;
 using Newtonsoft.Json.Linq;
 using NLog;
@@ -26,11 +27,13 @@ namespace Lidarr.Plugin.DiscogsLists.Test
         private Mock<IImportListStatusService> _status;
         private List<ImportListDefinition> _saved;
         private Mock<IImportListRepository> _repository;
+        private FakeMetadata _metadata;
 
         [SetUp]
         public void SetUp()
         {
             _discogs = new FakeDiscogs().WithIdentity();
+            _metadata = new FakeMetadata();
             _status = new Mock<IImportListStatusService>();
             _saved = new List<ImportListDefinition>();
             _repository = new Mock<IImportListRepository>();
@@ -105,6 +108,77 @@ namespace Lidarr.Plugin.DiscogsLists.Test
 
             Assert.That(items.Single().Album, Is.EqualTo("Two"));
             Assert.That(_discogs.Requests.Select(r => r.Uri.AbsolutePath), Is.EqualTo(new[] { "/oauth/identity", "/lists/2" }));
+        }
+
+        [Test]
+        public void a_failing_search_skips_only_that_item()
+        {
+            Releases(0, "Good", "Sunshine", "Also Good");
+            _metadata.Fails("Sunshine");
+
+            var items = Collection(new DiscogsCollectionSettings { ApiKey = "token" }).Fetch();
+
+            Assert.That(items.Select(i => i.Album), Is.EqualTo(new[] { "Good", "Also Good" }));
+            _status.Verify(s => s.RecordSuccess(7));
+        }
+
+        [Test]
+        public void imported_items_carry_ids_so_lidarr_does_not_search_again()
+        {
+            Releases(0, "Album A");
+
+            var item = Collection(new DiscogsCollectionSettings { ApiKey = "token" }).Fetch().Single();
+
+            Assert.That(item.AlbumMusicBrainzId, Is.EqualTo("album:Album A"));
+            Assert.That(item.ArtistMusicBrainzId, Is.EqualTo("artist:Artist"));
+        }
+
+        [Test]
+        public void unmatched_items_are_left_out()
+        {
+            Releases(0, "Obscure", "Known");
+            _metadata.HasNoMatch("Obscure");
+
+            var items = Collection(new DiscogsCollectionSettings { ApiKey = "token" }).Fetch();
+
+            Assert.That(items.Single().Album, Is.EqualTo("Known"));
+        }
+
+        [Test]
+        public void each_release_is_searched_once()
+        {
+            Releases(3, "Album A");
+            Releases(4, "Album A");
+
+            Collection(new DiscogsCollectionSettings { ApiKey = "token", FolderIds = new[] { 3, 4 } }).Fetch();
+
+            _metadata.Albums.Verify(s => s.SearchForNewAlbum("Album A", "Artist"), Times.Once());
+        }
+
+        [Test]
+        public void list_artists_are_matched_to_ids()
+        {
+            _discogs.Returns("/lists/2?page=1&per_page=100", @"{""items"": [{""id"": 1, ""type"": ""artist"", ""display_title"": ""Someone""}]}");
+
+            var item = UserLists(new DiscogsUserListsSettings { ApiKey = "token", ListIds = new[] { 2 } }).Fetch().Single();
+
+            Assert.That(item.ArtistMusicBrainzId, Is.EqualTo("artist:Someone"));
+            Assert.That(item.Album, Is.Null);
+        }
+
+        [Test]
+        public void stops_when_the_metadata_service_keeps_failing()
+        {
+            var titles = Enumerable.Range(0, MusicBrainzMatcher.MaxConsecutiveFailures + 5).Select(i => $"Album {i}").ToArray();
+            Releases(0, titles);
+            _metadata.Fails(titles);
+
+            var items = Collection(new DiscogsCollectionSettings { ApiKey = "token" }).Fetch();
+
+            Assert.That(items, Is.Empty);
+            _metadata.Albums.Verify(s => s.SearchForNewAlbum(It.IsAny<string>(), It.IsAny<string>()), Times.Exactly(MusicBrainzMatcher.MaxConsecutiveFailures));
+            _status.Verify(s => s.RecordFailure(7, default));
+            _status.Verify(s => s.RecordSuccess(It.IsAny<int>()), Times.Never());
         }
 
         [Test]
@@ -225,13 +299,13 @@ namespace Lidarr.Plugin.DiscogsLists.Test
             new () { Id = id, Name = "My list", Settings = settings };
 
         private DiscogsCollection Collection(DiscogsCollectionSettings settings) =>
-            Create(settings, resolver => new DiscogsCollection(_discogs.CreateClient(), resolver, _status.Object, null, null, LogManager.CreateNullLogger()));
+            Create(settings, resolver => new DiscogsCollection(_discogs.CreateClient(), resolver, _metadata.CreateMatcher(), _status.Object, null, null, LogManager.CreateNullLogger()));
 
         private DiscogsWantlist Wantlist(DiscogsWantlistSettings settings) =>
-            Create(settings, resolver => new DiscogsWantlist(_discogs.CreateClient(), resolver, _status.Object, null, null, LogManager.CreateNullLogger()));
+            Create(settings, resolver => new DiscogsWantlist(_discogs.CreateClient(), resolver, _metadata.CreateMatcher(), _status.Object, null, null, LogManager.CreateNullLogger()));
 
         private DiscogsUserLists UserLists(DiscogsUserListsSettings settings) =>
-            Create(settings, resolver => new DiscogsUserLists(_discogs.CreateClient(), resolver, _status.Object, null, null, LogManager.CreateNullLogger()));
+            Create(settings, resolver => new DiscogsUserLists(_discogs.CreateClient(), resolver, _metadata.CreateMatcher(), _status.Object, null, null, LogManager.CreateNullLogger()));
 
         private TList Create<TList>(DiscogsSettingsBase settings, Func<IDiscogsTokenResolver, TList> factory)
             where TList : IImportList

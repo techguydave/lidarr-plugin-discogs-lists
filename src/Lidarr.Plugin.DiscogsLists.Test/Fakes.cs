@@ -6,8 +6,12 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Lidarr.Plugin.DiscogsLists.Api;
+using Lidarr.Plugin.DiscogsLists.Mapping;
 using Moq;
+using NLog;
 using NzbDrone.Common.Http.Proxy;
+using NzbDrone.Core.MetadataSource;
+using NzbDrone.Core.Music;
 
 namespace Lidarr.Plugin.DiscogsLists.Test
 {
@@ -24,6 +28,52 @@ namespace Lidarr.Plugin.DiscogsLists.Test
         }
 
         public void Advance(TimeSpan duration) => UtcNow += duration;
+    }
+
+    // Stands in for Lidarr's metadata search: everything matches unless told otherwise.
+    internal class FakeMetadata
+    {
+        public FakeMetadata()
+        {
+            Albums.Setup(s => s.SearchForNewAlbum(It.IsAny<string>(), It.IsAny<string>()))
+                .Returns((string title, string artist) => new List<Album>
+                {
+                    new ()
+                    {
+                        ForeignAlbumId = $"album:{title}",
+                        Title = title,
+                        ArtistMetadata = new ArtistMetadata { ForeignArtistId = $"artist:{artist}", Name = artist }
+                    }
+                });
+
+            Artists.Setup(s => s.SearchForNewArtist(It.IsAny<string>()))
+                .Returns((string name) => new List<Artist>
+                {
+                    new () { Metadata = new ArtistMetadata { ForeignArtistId = $"artist:{name}", Name = name } }
+                });
+        }
+
+        public Mock<ISearchForNewAlbum> Albums { get; } = new ();
+
+        public Mock<ISearchForNewArtist> Artists { get; } = new ();
+
+        public MusicBrainzMatcher CreateMatcher() => new (new Lazy<ISearchForNewAlbum>(() => Albums.Object),
+            new Lazy<ISearchForNewArtist>(() => Artists.Object),
+            LogManager.CreateNullLogger());
+
+        public void Fails(params string[] titles)
+        {
+            foreach (var title in titles)
+            {
+                Albums.Setup(s => s.SearchForNewAlbum(title, It.IsAny<string>()))
+                    .Throws(new InvalidOperationException("Invalid response received from LidarrAPI."));
+            }
+        }
+
+        public void HasNoMatch(string title)
+        {
+            Albums.Setup(s => s.SearchForNewAlbum(title, It.IsAny<string>())).Returns(new List<Album>());
+        }
     }
 
     internal record SentRequest(HttpMethod Method, Uri Uri, string Authorization, string UserAgent, bool HasBody);
