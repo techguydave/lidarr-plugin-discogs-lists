@@ -1,0 +1,19 @@
+# Build output
+bin/
+obj/
+_output/
+_plugins/
+_temp/
+_tests/
+artifacts/
+*.zip
+TestResults/
+
+# Editors and local tooling
+.vs/
+.idea/
+.vscode/
+*.user
+.DS_Store
+.claude/
+.dev/
