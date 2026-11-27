@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Lidarr.Plugin.DiscogsLists.Api;
+using Lidarr.Plugin.DiscogsLists.Editions;
 using Lidarr.Plugin.DiscogsLists.Mapping;
 using Moq;
 using NLog;
@@ -62,6 +63,8 @@ namespace Lidarr.Plugin.DiscogsLists.Test
 
         public Mock<IMusicBrainzClient> MusicBrainz { get; } = new ();
 
+        public Mock<IOwnedEditions> Editions { get; } = new ();
+
         public MusicBrainzMatcher CreateMatcher()
         {
             LinkLookupFromDictionary();
@@ -72,6 +75,7 @@ namespace Lidarr.Plugin.DiscogsLists.Test
         public MusicBrainzMatcher CreateMatcherKeepingSetup() => new (new Lazy<ISearchForNewAlbum>(() => Albums.Object),
             new Lazy<ISearchForNewArtist>(() => Artists.Object),
             new DiscogsLinkResolver(MusicBrainz.Object, new NzbDrone.Common.Cache.CacheManager(), LogManager.CreateNullLogger()),
+            Editions.Object,
             LogManager.CreateNullLogger());
 
         private void LinkLookupFromDictionary()

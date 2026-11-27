@@ -49,19 +49,30 @@ namespace Lidarr.Plugin.DiscogsLists.Mapping
         private void ResolveLinks(IReadOnlyCollection<DiscogsItem> items)
         {
             // Masters group every pressing of a recording, as release groups do, so they are tried first.
-            Assign(items.Where(i => i.Album != null && i.MasterId > 0), i => MasterUrl(i.MasterId.Value), "release_group");
-            Assign(items.Where(i => i.Album == null && i.DiscogsArtistId > 0), i => ArtistUrl(i.DiscogsArtistId.Value), "artist");
+            foreach (var (item, id) in Lookup(items.Where(i => i.Album != null && i.MasterId > 0), i => MasterUrl(i.MasterId.Value), "release_group"))
+            {
+                item.MusicBrainzId = id;
+            }
 
-            // A release linked to a MusicBrainz release leads to that release's group.
-            Assign(items.Where(i => i.Album != null && i.ReleaseId > 0), i => ReleaseUrl(i.ReleaseId.Value), "release");
+            foreach (var (item, id) in Lookup(items.Where(i => i.Album == null && i.DiscogsArtistId > 0), i => ArtistUrl(i.DiscogsArtistId.Value), "artist"))
+            {
+                item.MusicBrainzId = id;
+            }
+
+            // A release linked to a MusicBrainz release identifies the exact edition, and leads to its group when the
+            // master had no link. Every release is looked up, which is one batched request per 50 releases.
+            foreach (var (item, id) in Lookup(items.Where(i => i.Album != null && i.ReleaseId > 0), i => ReleaseUrl(i.ReleaseId.Value), "release"))
+            {
+                item.MusicBrainzReleaseId = id;
+                item.MusicBrainzId ??= GroupOf(id);
+            }
         }
 
-        private void Assign(IEnumerable<DiscogsItem> candidates, Func<DiscogsItem, string> url, string targetType)
+        // Returns the items that have a single, unambiguous link of the given type, with the linked ID.
+        private List<(DiscogsItem Item, string Id)> Lookup(IEnumerable<DiscogsItem> candidates, Func<DiscogsItem, string> url, string targetType)
         {
-            var pending = candidates.Where(i => i.MusicBrainzId == null).ToList();
-            var keys = pending.Select(i => (Item: i, Key: $"{targetType}:{url(i)}")).ToList();
-
-            var unknown = keys.Where(k => _cache.Find(k.Key) == null).Select(k => url(k.Item)).Distinct().ToList();
+            var keys = candidates.Select(i => (Item: i, Url: url(i))).ToList();
+            var unknown = keys.Select(k => k.Url).Distinct().Where(u => _cache.Find(Key(targetType, u)) == null).ToList();
 
             if (unknown.Any())
             {
@@ -72,27 +83,30 @@ namespace Lidarr.Plugin.DiscogsLists.Mapping
                     var found = links.TryGetValue(discogsUrl, out var list) ? list : new List<MusicBrainzLink>();
                     var ids = found.Where(l => l.TargetType == targetType).Select(l => l.Id).Distinct().ToList();
 
-                    // Only a single, unambiguous link is trusted. An empty value records that there is none.
-                    var id = ids.Count == 1 ? ids[0] : string.Empty;
-
-                    if (targetType == "release" && id.Length > 0)
-                    {
-                        id = _musicBrainz.GetReleaseGroupOfRelease(id) ?? string.Empty;
-                    }
-
-                    _cache.Set($"{targetType}:{discogsUrl}", id, CacheLifetime);
+                    // An empty value records that there is no usable link.
+                    _cache.Set(Key(targetType, discogsUrl), ids.Count == 1 ? ids[0] : string.Empty, CacheLifetime);
                 }
             }
 
-            foreach (var (item, key) in keys)
-            {
-                var id = _cache.Find(key);
-
-                if (!string.IsNullOrEmpty(id))
-                {
-                    item.MusicBrainzId = id;
-                }
-            }
+            return keys.Select(k => (k.Item, Id: _cache.Find(Key(targetType, k.Url))))
+                .Where(k => !string.IsNullOrEmpty(k.Id))
+                .ToList();
         }
+
+        private string GroupOf(string releaseId)
+        {
+            var key = Key("group-of", releaseId);
+            var group = _cache.Find(key);
+
+            if (group == null)
+            {
+                group = _musicBrainz.GetReleaseGroupOfRelease(releaseId) ?? string.Empty;
+                _cache.Set(key, group, CacheLifetime);
+            }
+
+            return group.Length > 0 ? group : null;
+        }
+
+        private static string Key(string type, string value) => $"{type}:{value}";
     }
 }

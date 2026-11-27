@@ -52,7 +52,16 @@ Lidarr needs a MusicBrainz ID for each album, which Discogs doesn't provide. The
 1. **MusicBrainz links.** MusicBrainz editors link many albums and artists to their Discogs pages. When your Discogs release, its master release or an artist has such a link, the plugin uses it, which finds the exact recording.
 2. **Name search.** Otherwise it searches Lidarr by artist and title. It only accepts a result whose title and artist are close to the Discogs ones, using the year to choose between similar albums.
 
-Releases with no close match are skipped. Lidarr tracks albums rather than individual pressings, so it chooses which edition to monitor; you can pick another on the album's page in Lidarr.
+Releases with no close match are skipped.
+
+### Editions
+
+Lidarr tracks albums, and monitors one edition of each. Left alone, it picks the edition with the most tracks, often a deluxe edition, and then rejects your files as having missing tracks. When the plugin adds an album, it monitors the edition you own instead:
+
+1. If MusicBrainz links your Discogs release to one of its releases, that exact release.
+2. Otherwise, for the collection and wantlist, the edition with the same format (vinyl, CD, cassette and so on), then the closest number of discs, label and year.
+
+The plugin only changes albums it adds to your library, once, before they have files. It never changes an album that was already in your library, or an edition you pick on the album's page. If no edition matches, Lidarr's choice stands. User lists only use MusicBrainz links, as Discogs doesn't send their formats.
 
 To find links, each sync sends the Discogs release, master and artist IDs of your items to [MusicBrainz](https://musicbrainz.org), read-only and at most about one request per second. No Discogs token or account details are sent. If MusicBrainz is unavailable, the plugin matches by name.
 

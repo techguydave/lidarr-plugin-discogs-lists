@@ -45,6 +45,24 @@ namespace Lidarr.Plugin.DiscogsLists.Api.Models
         public int MasterId { get; set; }
 
         public List<DiscogsArtist> Artists { get; set; }
+
+        public List<DiscogsFormat> Formats { get; set; }
+
+        public List<DiscogsLabel> Labels { get; set; }
+    }
+
+    public class DiscogsFormat
+    {
+        public string Name { get; set; }
+
+        // Discogs sends the number of discs or tapes as a string.
+        [JsonProperty("qty")]
+        public string Quantity { get; set; }
+    }
+
+    public class DiscogsLabel
+    {
+        public string Name { get; set; }
     }
 
     public class DiscogsRelease
