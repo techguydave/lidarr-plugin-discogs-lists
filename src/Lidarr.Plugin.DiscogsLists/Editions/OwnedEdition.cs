@@ -5,6 +5,12 @@ using NzbDrone.Core.Music;
 
 namespace Lidarr.Plugin.DiscogsLists.Editions
 {
+    // The release to monitor, and the release that matches the pressing, which differ when the latter is not usable.
+    public record EditionChoice(AlbumRelease Release, AlbumRelease Owned)
+    {
+        public bool IsSubstitute => !ReferenceEquals(Release, Owned);
+    }
+
     // What is known about the pressing on Discogs, used to pick the same edition among an album's releases in Lidarr.
     public record OwnedEdition(string MusicBrainzReleaseId,
                                IReadOnlyCollection<string> Formats,
@@ -16,7 +22,33 @@ namespace Lidarr.Plugin.DiscogsLists.Editions
 
         public bool IsKnown => MusicBrainzReleaseId != null || Formats.Any();
 
-        // Returns the release that matches, or null to leave Lidarr's choice alone.
+        // Returns the release to monitor, or null to leave Lidarr's choice alone. A release that is not usable, as
+        // Lidarr could not read its folders back, is replaced by a usable one with the same number of tracks.
+        public EditionChoice Choose(IReadOnlyCollection<AlbumRelease> releases, Func<AlbumRelease, bool> usable)
+        {
+            var owned = Choose(releases);
+
+            if (owned == null)
+            {
+                return null;
+            }
+
+            if (usable(owned))
+            {
+                return new EditionChoice(owned, owned);
+            }
+
+            var substitute = releases
+                .Where(r => r.TrackCount == owned.TrackCount && usable(r))
+                .OrderByDescending(r => r.Monitored)
+                .ThenBy(r => r.Media?.Count ?? 0)
+                .ThenBy(r => owned.ReleaseDate.HasValue && r.ReleaseDate.HasValue ? Math.Abs(r.ReleaseDate.Value.Year - owned.ReleaseDate.Value.Year) : int.MaxValue)
+                .FirstOrDefault();
+
+            return substitute == null ? null : new EditionChoice(substitute, owned);
+        }
+
+        // Returns the release that matches the pressing, or null if none does.
         public AlbumRelease Choose(IReadOnlyCollection<AlbumRelease> releases)
         {
             if (MusicBrainzReleaseId != null)

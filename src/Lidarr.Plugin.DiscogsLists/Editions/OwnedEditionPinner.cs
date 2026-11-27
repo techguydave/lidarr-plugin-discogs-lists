@@ -6,6 +6,7 @@ using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Music;
 using NzbDrone.Core.Music.Events;
+using NzbDrone.Core.Organizer;
 
 namespace Lidarr.Plugin.DiscogsLists.Editions
 {
@@ -19,6 +20,8 @@ namespace Lidarr.Plugin.DiscogsLists.Editions
     // pressing the user owns, and then rejects the user's files because tracks are missing. This monitors the owned
     // edition instead.
     //
+    // An edition is only chosen if Lidarr can read its folders back when it scans the library (see MultiDiscFolders).
+    //
     // Only albums that are new to the library are changed, once, before they have files, so an edition chosen in
     // Lidarr is never overridden. Nothing is stored outside memory.
     public class OwnedEditionPinner : IOwnedEditions, IHandle<AlbumUpdatedEvent>
@@ -29,6 +32,7 @@ namespace Lidarr.Plugin.DiscogsLists.Editions
         private readonly Lazy<IAlbumService> _albums;
         private readonly Lazy<IReleaseService> _releases;
         private readonly Lazy<IMediaFileService> _files;
+        private readonly Lazy<INamingConfigService> _naming;
         private readonly Logger _logger;
 
         // Lazy, as Lidarr's music services and the import lists that use this depend on each other.
@@ -36,12 +40,14 @@ namespace Lidarr.Plugin.DiscogsLists.Editions
                                   Lazy<IAlbumService> albums,
                                   Lazy<IReleaseService> releases,
                                   Lazy<IMediaFileService> files,
+                                  Lazy<INamingConfigService> naming,
                                   Logger logger)
         {
             _pending = cacheManager.GetCache<OwnedEdition>(typeof(OwnedEditionPinner), "pending");
             _albums = albums;
             _releases = releases;
             _files = files;
+            _naming = naming;
             _logger = logger;
         }
 
@@ -98,25 +104,36 @@ namespace Lidarr.Plugin.DiscogsLists.Editions
                 return;
             }
 
-            var chosen = edition.Choose(releases);
+            var format = _naming.Value.GetConfig()?.MultiDiscTrackFormat;
+            var choice = edition.Choose(releases, r => MultiDiscFolders.CanBeReadBack(r, format));
 
-            if (chosen == null)
+            if (choice == null)
             {
-                _logger.Debug("'{0}': no edition in Lidarr matches the Discogs release, keeping Lidarr's choice", album.Title);
+                _logger.Debug("'{0}': no usable edition in Lidarr matches the Discogs release, keeping Lidarr's choice", album.Title);
                 return;
             }
 
-            if (chosen.Monitored)
+            if (choice.IsSubstitute)
+            {
+                // Info, as changing the setting is the only way to get the exact edition.
+                _logger.Info("'{0}': the Discogs release matches the {1} edition, but Lidarr cannot rescan multi-disc folders named by its format. " +
+                             "Using an edition with the same number of tracks. To use the exact edition, name the disc folder 'Disc {{medium:00}}' in Multi Disc Track Format.",
+                    album.Title,
+                    Describe(choice.Owned));
+            }
+
+            if (choice.Release.Monitored)
             {
                 return;
             }
 
-            _releases.Value.SetMonitored(chosen);
+            _releases.Value.SetMonitored(choice.Release);
 
             _logger.Info("'{0}': monitoring the {1} edition, which matches the Discogs release ({2})",
                 album.Title,
-                Describe(chosen),
-                edition.MusicBrainzReleaseId != null && chosen.ForeignReleaseId == edition.MusicBrainzReleaseId ? "linked on MusicBrainz" : "same format");
+                Describe(choice.Release),
+                choice.IsSubstitute ? "same number of tracks" :
+                edition.MusicBrainzReleaseId != null && choice.Release.ForeignReleaseId == edition.MusicBrainzReleaseId ? "linked on MusicBrainz" : "same format");
         }
 
         private static string Describe(AlbumRelease release)
