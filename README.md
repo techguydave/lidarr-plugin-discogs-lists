@@ -31,7 +31,13 @@ To test pre-releases, which are not intended for production use, install `https:
 2. In Lidarr, open **Settings > Import Lists**, select **+**, and choose a Discogs list (under **Other List**).
 3. Paste the token into **Personal Access Token**.
 4. For the collection or user lists, choose what to import. Leave the selection empty to import everything.
-5. Choose the usual Lidarr options (root folder, profiles, monitoring), then **Test** and **Save**.
+5. To import only the albums on your Discogs list, set:
+   - **Monitor** to **Specific Album**. Lidarr's default, **All Artist Albums**, monitors every album by each artist.
+   - **Metadata Profile** to **None**. Any other profile adds every album by each artist to your library, thousands for some classical composers, and monitors them all until Lidarr finishes refreshing them. **Test** warns about this.
+   - **Monitor New Albums** to **None**, unless you want future releases by these artists too.
+6. Choose a root folder and quality profile, then **Test** and **Save**.
+
+With **Metadata Profile: None**, a user list entry that is an artist rather than a release adds that artist with no albums.
 
 ### Sharing one token
 
@@ -46,6 +52,7 @@ Discogs does not provide MusicBrainz IDs, so Lidarr searches by artist and album
 - Releases Lidarr cannot match are skipped. Pressings with unusual titles are the most likely to be missed.
 - If Lidarr's metadata search fails for one release, that release is skipped with a warning in the log, and the rest of the list still imports. If 25 searches fail in a row, the plugin stops and tries again later.
 - Collaborations use the first credited artist for the collection and wantlist.
+- Artists already in your library keep their own monitoring and metadata profile. To trim one, set its **Metadata Profile** to **None** in **Artist Editor** and refresh it. Albums with files are kept.
 - "Various" artist compilations are skipped.
 - In user lists, releases, masters and artists are imported. Labels are skipped.
 
