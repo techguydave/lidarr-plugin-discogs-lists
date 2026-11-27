@@ -2,7 +2,8 @@
 
 ## Rules
 
-- **Discogs access is read-only, with no exceptions.** All requests go through `Api/DiscogsTransport.cs`, which can only send `GET`. `scripts/check-read-only.sh` enforces this.
+- **All network access is read-only, with no exceptions.** Requests go only through `Api/DiscogsTransport.cs` and `Api/MusicBrainzTransport.cs`, which can only send `GET` to their own host. `scripts/check-read-only.sh` enforces this.
+- Follow the [MusicBrainz API rules](https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting): at most one request per second and a User-Agent with contact details.
 - Follow the [Discogs API documentation](https://www.discogs.com/developers) and [Terms of Use](https://support.discogs.com/hc/articles/360009334593-API-Terms-of-Use): authenticate every request, keep the unique User-Agent, respect the rate limit, and do not store Discogs data.
 
 ## Building

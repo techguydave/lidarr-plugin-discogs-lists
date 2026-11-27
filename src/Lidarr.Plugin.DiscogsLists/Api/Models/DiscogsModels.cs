@@ -39,6 +39,11 @@ namespace Lidarr.Plugin.DiscogsLists.Api.Models
     public class DiscogsBasicInformation
     {
         public string Title { get; set; }
+        public int Year { get; set; }
+
+        [JsonProperty("master_id")]
+        public int MasterId { get; set; }
+
         public List<DiscogsArtist> Artists { get; set; }
     }
 

@@ -35,7 +35,7 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists.Collection
 
         protected override string OptionsAction => FoldersAction;
 
-        protected override IEnumerable<ImportListItemInfo> FetchItems(DiscogsSession session)
+        protected override IEnumerable<DiscogsItem> FetchItems(DiscogsSession session)
         {
             var selected = Settings.FolderIds?.Distinct().ToList() ?? new List<int>();
 

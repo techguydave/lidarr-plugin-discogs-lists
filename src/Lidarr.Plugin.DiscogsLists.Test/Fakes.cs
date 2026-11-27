@@ -57,9 +57,48 @@ namespace Lidarr.Plugin.DiscogsLists.Test
 
         public Mock<ISearchForNewArtist> Artists { get; } = new ();
 
-        public MusicBrainzMatcher CreateMatcher() => new (new Lazy<ISearchForNewAlbum>(() => Albums.Object),
+        // Discogs URL => MusicBrainz links, as MusicBrainz would return them.
+        public Dictionary<string, List<MusicBrainzLink>> Links { get; } = new ();
+
+        public Mock<IMusicBrainzClient> MusicBrainz { get; } = new ();
+
+        public MusicBrainzMatcher CreateMatcher()
+        {
+            LinkLookupFromDictionary();
+
+            return CreateMatcherKeepingSetup();
+        }
+
+        public MusicBrainzMatcher CreateMatcherKeepingSetup() => new (new Lazy<ISearchForNewAlbum>(() => Albums.Object),
             new Lazy<ISearchForNewArtist>(() => Artists.Object),
+            new DiscogsLinkResolver(MusicBrainz.Object, new NzbDrone.Common.Cache.CacheManager(), LogManager.CreateNullLogger()),
             LogManager.CreateNullLogger());
+
+        private void LinkLookupFromDictionary()
+        {
+            MusicBrainz.Setup(m => m.GetLinks(It.IsAny<IReadOnlyCollection<string>>()))
+                .Returns((IReadOnlyCollection<string> urls) => urls.Where(Links.ContainsKey).ToDictionary(u => u, u => Links[u]));
+        }
+
+        // Makes the release group exist in Lidarr's metadata.
+        public void HasReleaseGroup(string id, string title, string artist)
+        {
+            Albums.Setup(s => s.SearchForNewAlbum($"lidarr:{id}", It.IsAny<string>()))
+                .Returns(new List<Album> { new () { ForeignAlbumId = id, Title = title, ArtistMetadata = new ArtistMetadata { ForeignArtistId = $"artist:{artist}", Name = artist } } });
+        }
+
+        public void SearchReturns(string title, params Album[] albums)
+        {
+            Albums.Setup(s => s.SearchForNewAlbum(title, It.IsAny<string>())).Returns(albums.ToList());
+        }
+
+        public static Album Candidate(string title, string artist, int year = 0) => new ()
+        {
+            ForeignAlbumId = $"album:{title}:{year}",
+            Title = title,
+            ReleaseDate = year > 0 ? new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc) : null,
+            ArtistMetadata = new ArtistMetadata { ForeignArtistId = $"artist:{artist}", Name = artist }
+        };
 
         public void Fails(params string[] titles)
         {

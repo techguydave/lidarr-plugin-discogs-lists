@@ -117,7 +117,7 @@ namespace Lidarr.Plugin.DiscogsLists.ImportLists
             return new { options };
         }
 
-        protected abstract IEnumerable<ImportListItemInfo> FetchItems(DiscogsSession session);
+        protected abstract IEnumerable<DiscogsItem> FetchItems(DiscogsSession session);
 
         protected virtual IEnumerable<DiscogsOption> GetOptions(DiscogsSession session) => Enumerable.Empty<DiscogsOption>();
 
