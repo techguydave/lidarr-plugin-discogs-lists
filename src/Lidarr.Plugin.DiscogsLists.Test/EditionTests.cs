@@ -11,6 +11,7 @@ using NzbDrone.Common.Cache;
 using NzbDrone.Core.MediaFiles;
 using NzbDrone.Core.Music;
 using NzbDrone.Core.Music.Events;
+using NzbDrone.Core.Organizer;
 using NzbDrone.Core.Parser.Model;
 
 namespace Lidarr.Plugin.DiscogsLists.Test
@@ -187,6 +188,79 @@ namespace Lidarr.Plugin.DiscogsLists.Test
             pinner.Releases.Verify(r => r.SetMonitored(vinyl), Times.Once());
         }
 
+        [TestCase("{Album Title}/{Medium Format} {medium:00}/{track:00} - {Track Title}", "CD", true)]
+        [TestCase("{Album Title}/{Medium Format} {medium:00}/{track:00} - {Track Title}", "Hybrid SACD", true)]
+        [TestCase("{Album Title}/{Medium Format} {medium:00}/{track:00} - {Track Title}", "12\" Vinyl", false)]
+        [TestCase("{Album Title}/{Medium Format} {medium:00}/{track:00} - {Track Title}", "Digital Media", false)]
+        [TestCase("{Album Title}/Disc {medium:00}/{track:00} - {Track Title}", "12\" Vinyl", true)]
+        [TestCase("{Album Title}/{medium:00} {Medium Format}/{track:00} - {Track Title}", "CD", false)]
+        [TestCase("{Album Title}/{medium:0}{track:00} - {Track Title}", "12\" Vinyl", true)]
+        public void lidarr_reads_back_only_cd_and_disc_folders(string format, string medium, bool readable)
+        {
+            Assert.That(MultiDiscFolders.CanBeReadBack(Release("r", medium, 2, 2000), format), Is.EqualTo(readable));
+        }
+
+        [Test]
+        public void a_single_disc_is_always_readable()
+        {
+            Assert.That(MultiDiscFolders.CanBeReadBack(Release("r", "12\" Vinyl", 1, 2000), NamingConfig.Default.MultiDiscTrackFormat), Is.True);
+        }
+
+        [Test]
+        public void discs_of_different_formats_are_not_readable_when_named_by_format()
+        {
+            var release = Release("r", "CD", 1, 2000);
+            release.Media.Add(new Medium { Number = 2, Format = "Enhanced CD" });
+
+            Assert.That(MultiDiscFolders.CanBeReadBack(release, NamingConfig.Default.MultiDiscTrackFormat), Is.False);
+        }
+
+        [Test]
+        public void a_double_vinyl_is_replaced_by_a_readable_edition_with_the_same_tracks()
+        {
+            // Venice: Lidarr read "12 Vinyl 01" and "12 Vinyl 02" as two albums and downloaded the album again.
+            var pinner = new PinnerFixture();
+            var deluxe = Release("deluxe", "CD", 2, 2015, tracks: 20, monitored: true);
+            var vinyl = Release("vinyl", "12\" Vinyl", 2, 2015, tracks: 16);
+            var digital = Release("digital", "Digital Media", 1, 2014, tracks: 16);
+            pinner.Releases.Setup(r => r.GetReleasesByAlbum(7)).Returns(new List<AlbumRelease> { deluxe, vinyl, digital });
+
+            pinner.Subject.Remember("rg", new OwnedEdition("vinyl", Vinyl, 2, Array.Empty<string>(), 2015));
+            pinner.Subject.Handle(new AlbumUpdatedEvent(new Album { Id = 7, ForeignAlbumId = "rg", Title = "Venice" }));
+
+            pinner.Releases.Verify(r => r.SetMonitored(digital), Times.Once());
+            pinner.Releases.Verify(r => r.SetMonitored(vinyl), Times.Never());
+        }
+
+        [Test]
+        public void a_double_vinyl_with_no_readable_equivalent_keeps_lidarrs_choice()
+        {
+            var pinner = new PinnerFixture();
+            pinner.Releases.Setup(r => r.GetReleasesByAlbum(7)).Returns(new List<AlbumRelease>
+            {
+                Release("cd", "CD", 1, 2015, tracks: 12, monitored: true),
+                Release("vinyl", "12\" Vinyl", 2, 2015, tracks: 16)
+            });
+
+            pinner.Subject.Remember("rg", new OwnedEdition("vinyl", Vinyl, 2, Array.Empty<string>(), 2015));
+            pinner.Subject.Handle(new AlbumUpdatedEvent(new Album { Id = 7, ForeignAlbumId = "rg" }));
+
+            pinner.Releases.Verify(r => r.SetMonitored(It.IsAny<AlbumRelease>()), Times.Never());
+        }
+
+        [Test]
+        public void a_double_vinyl_is_used_when_disc_folders_are_named_disc()
+        {
+            var pinner = new PinnerFixture { Format = "{Album Title}/Disc {medium:00}/{track:00} - {Track Title}" };
+            var vinyl = Release("vinyl", "12\" Vinyl", 2, 2015, tracks: 16);
+            pinner.Releases.Setup(r => r.GetReleasesByAlbum(7)).Returns(new List<AlbumRelease> { Release("cd", "CD", 1, 2015, monitored: true), vinyl });
+
+            pinner.Subject.Remember("rg", new OwnedEdition("vinyl", Vinyl, 2, Array.Empty<string>(), 2015));
+            pinner.Subject.Handle(new AlbumUpdatedEvent(new Album { Id = 7, ForeignAlbumId = "rg" }));
+
+            pinner.Releases.Verify(r => r.SetMonitored(vinyl), Times.Once());
+        }
+
         private static AlbumRelease Release(string id, string format, int discs, int year, string label = null, int tracks = 10, bool monitored = false) => new ()
         {
             ForeignReleaseId = id,
@@ -203,10 +277,12 @@ namespace Lidarr.Plugin.DiscogsLists.Test
             public PinnerFixture()
             {
                 Files.Setup(f => f.GetFilesByAlbum(It.IsAny<int>())).Returns(new List<TrackFile>());
+                Naming.Setup(n => n.GetConfig()).Returns(() => new NamingConfig { MultiDiscTrackFormat = Format });
                 Subject = new OwnedEditionPinner(new CacheManager(),
                     new Lazy<IAlbumService>(() => Albums.Object),
                     new Lazy<IReleaseService>(() => Releases.Object),
                     new Lazy<IMediaFileService>(() => Files.Object),
+                    new Lazy<INamingConfigService>(() => Naming.Object),
                     LogManager.CreateNullLogger());
             }
 
@@ -215,6 +291,10 @@ namespace Lidarr.Plugin.DiscogsLists.Test
             public Mock<IReleaseService> Releases { get; } = new ();
 
             public Mock<IMediaFileService> Files { get; } = new ();
+
+            public Mock<INamingConfigService> Naming { get; } = new ();
+
+            public string Format { get; set; } = NamingConfig.Default.MultiDiscTrackFormat;
 
             public OwnedEditionPinner Subject { get; }
         }

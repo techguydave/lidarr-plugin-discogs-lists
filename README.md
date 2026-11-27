@@ -61,6 +61,8 @@ Lidarr tracks albums, and monitors one edition of each. Left alone, it picks the
 1. If MusicBrainz links your Discogs release to one of its releases, that exact release.
 2. Otherwise, for the collection and wantlist, the edition with the same format (vinyl, CD, cassette and so on), then the closest number of discs, label and year.
 
+**Multi-disc editions.** Lidarr puts each disc in its own folder, named `{Medium Format} {medium:00}` by default, such as `12 Vinyl 01`. When it rescans your library, it only joins folders named `CD` or `Disc` back into one album. It reads any others as separate albums, sees the album as incomplete, downloads it again and deletes the files it has. So the plugin doesn't pick a multi-disc vinyl, cassette or digital edition with that naming. It picks an edition with the same number of tracks that Lidarr can rescan, and says so in the log. To get the exact edition, change the disc folder in **Settings > Media Management > Multi Disc Track Format** to `Disc {medium:00}`.
+
 The plugin only changes albums it adds to your library, once, before they have files. It never changes an album that was already in your library, or an edition you pick on the album's page. If no edition matches, Lidarr's choice stands. User lists only use MusicBrainz links, as Discogs doesn't send their formats.
 
 To find links, each sync sends the Discogs release, master and artist IDs of your items to [MusicBrainz](https://musicbrainz.org), read-only and at most about one request per second. No Discogs token or account details are sent. If MusicBrainz is unavailable, the plugin matches by name.
