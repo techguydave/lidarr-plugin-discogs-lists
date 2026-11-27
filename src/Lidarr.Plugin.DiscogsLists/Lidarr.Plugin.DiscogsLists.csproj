@@ -13,6 +13,10 @@
 
     <!-- The branch whose releases Lidarr checks for updates. Empty means the stable (main) channel. -->
     <PluginBranch Condition="'$(PluginBranch)' == ''"></PluginBranch>
+
+    <!-- For a branch release Lidarr advertises "X.Y.Z-branch", dropping the build number. The installed
+         version must read the same, or the two columns under System > Plugins look like a pending update. -->
+    <InformationalVersion Condition="'$(PluginBranch)' != ''">$(Version.Split('-')[0])-$(PluginBranch)</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
