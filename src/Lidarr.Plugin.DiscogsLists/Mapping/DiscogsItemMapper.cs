@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using Lidarr.Plugin.DiscogsLists.Api.Models;
+using Lidarr.Plugin.DiscogsLists.Editions;
 using NzbDrone.Core.Parser.Model;
 
 namespace Lidarr.Plugin.DiscogsLists.Mapping
@@ -17,17 +20,36 @@ namespace Lidarr.Plugin.DiscogsLists.Mapping
 
         private static readonly string[] PlaceholderArtists = { "Various", "Various Artists", "Unknown Artist", "No Artist" };
 
+        private static readonly string[] NonMediaFormats = { "Box Set", "All Media" };
+
         public static DiscogsItem Map(DiscogsRelease release)
         {
             var information = release?.BasicInformation;
             var artist = CleanArtist(information?.Artists?.FirstOrDefault()?.Name);
             var item = Album(artist, information?.Title);
 
-            return item == null ? null : new DiscogsItem(item)
+            if (item == null)
+            {
+                return null;
+            }
+
+            // Packaging such as "Box Set" is not a medium.
+            var media = (information.Formats ?? new List<DiscogsFormat>())
+                .Where(f => !string.IsNullOrWhiteSpace(f?.Name) && !NonMediaFormats.Contains(f.Name, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            return new DiscogsItem(item)
             {
                 ReleaseId = release.Id,
                 MasterId = information.MasterId,
-                Year = information.Year
+                Year = information.Year,
+                Formats = media.Select(f => OwnedEdition.FormatFamily(f.Name)).Distinct().ToList(),
+                MediumCount = media.Sum(f => int.TryParse(f.Quantity, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n > 0 ? n : 1),
+                Labels = (information.Labels ?? new List<DiscogsLabel>())
+                    .Select(l => OwnedEdition.NormalizeLabel(l?.Name))
+                    .Where(l => !string.IsNullOrEmpty(l))
+                    .Distinct()
+                    .ToList()
             };
         }
 

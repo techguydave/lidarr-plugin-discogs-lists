@@ -13,4 +13,5 @@ All notable changes to this project are documented here. The format follows [Kee
 - Read-only Discogs access with rate limiting.
 - A release whose metadata search fails is skipped, instead of stopping the whole import.
 - Albums and artists are matched using MusicBrainz's links to Discogs where they exist, and otherwise by a name search that rejects poor matches.
+- Albums the plugin adds monitor the edition you own on Discogs, matched by MusicBrainz link or by format, discs, label and year, instead of Lidarr's default of the edition with the most tracks.
 - **Test** warns when **Monitor: Specific Album** is combined with a metadata profile other than **None**, which adds every album by each artist.

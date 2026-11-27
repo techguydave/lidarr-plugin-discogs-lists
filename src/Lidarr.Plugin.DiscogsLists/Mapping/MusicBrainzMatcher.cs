@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Lidarr.Plugin.DiscogsLists.Editions;
 using NLog;
 using NzbDrone.Core.MetadataSource;
 using NzbDrone.Core.Music;
@@ -32,14 +33,16 @@ namespace Lidarr.Plugin.DiscogsLists.Mapping
         private readonly Lazy<ISearchForNewAlbum> _albumSearch;
         private readonly Lazy<ISearchForNewArtist> _artistSearch;
         private readonly DiscogsLinkResolver _links;
+        private readonly IOwnedEditions _editions;
         private readonly Logger _logger;
 
         // The searches must be Lazy: Lidarr's search service depends on the factory that builds import lists.
-        public MusicBrainzMatcher(Lazy<ISearchForNewAlbum> albumSearch, Lazy<ISearchForNewArtist> artistSearch, DiscogsLinkResolver links, Logger logger)
+        public MusicBrainzMatcher(Lazy<ISearchForNewAlbum> albumSearch, Lazy<ISearchForNewArtist> artistSearch, DiscogsLinkResolver links, IOwnedEditions editions, Logger logger)
         {
             _albumSearch = albumSearch;
             _artistSearch = artistSearch;
             _links = links;
+            _editions = editions;
             _logger = logger;
         }
 
@@ -112,6 +115,8 @@ namespace Lidarr.Plugin.DiscogsLists.Mapping
             item.Item.Album = album.Title;
             item.Item.Artist = artist.Name;
             item.Item.ArtistMusicBrainzId = artist.ForeignArtistId;
+
+            _editions.Remember(album.ForeignAlbumId, item.Edition);
 
             return true;
         }
